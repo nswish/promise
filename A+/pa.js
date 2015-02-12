@@ -39,7 +39,7 @@ exports.deferred = function(){
         _promise_value = value;
         _promise_status = status;
 
-        _execute();
+        setTimeout(_execute);
     }
 
     /**
@@ -55,10 +55,14 @@ exports.deferred = function(){
 
             if(typeof(_task[_callback[_promise_status]]) == "function") {
                 try {
-                    _value = _task[_callback[_promise_status]](_promise_value);
+                    _value = _task[_callback[_promise_status]].call(undefined, _promise_value);
+
                     if(_value && typeof(_value.then) == 'function') {
-                        _value.then(function(value){ _task.deferred.resolve(value); }, function(value){ _task.deferred.reject(value); });
-                    } else
+                        if(_value == _task.deferred.promise) throw new TypeError("Same Promise Error!");
+
+                        _value.then.call(undefined, function(value){ _task.deferred.resolve(value); }, function(value){ _task.deferred.reject(value); });
+                    }
+                    else
                         _task.deferred.resolve(_value);
                 } catch(e) {
                     _task.deferred.reject(e);
