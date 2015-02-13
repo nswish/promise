@@ -1,4 +1,3 @@
-var util = require('util');
 /**
  * Deferred 的实现
  */
@@ -23,11 +22,11 @@ function Deferred(){
     };
 
     this.resolve = function(value){
-        _resolvject(value, "fulfilled");
+        _resolvject.call(this, value, "fulfilled");
     };
 
     this.reject  = function(value){
-        _resolvject(value, "rejected");
+        _resolvject.call(this, value, "rejected");
     };
 
     function _resolvject(value, status) {
@@ -66,17 +65,12 @@ function Deferred(){
     function _resolveProc(deferred, _value){
         var _then, _resolved=false, _rejected=false;
 
-        // 1.
         if(_value == deferred.promise) throw new TypeError("Same Promise Error!");
 
-        // 2.
         if(_value && typeof(_value.state) == "function") {
-            _value.then.call(undefined, function(value){ 
-                _resolveProc(deferred, value);
-            }, function(value){ deferred.reject(value); });
+            _value.then.call(undefined, function(value){ _resolveProc(deferred, value); }, function(value){ deferred.reject(value); });
         }
 
-        // 3.
         else if(_value && (typeof(_value) == "object" || typeof(_value) == "function")) {
             try {
                 _then = _value.then;
@@ -88,12 +82,12 @@ function Deferred(){
             if(typeof(_then) == "function") {
                 try {
                     _then.call(_value, function(value){
-                        if(!_resolved) 
+                        if(!_resolved && !_rejected) 
                             _resolveProc(deferred, value); 
                         _resolved = true;
-                    }, function(value){ 
-                        if(!_rejected)
-                            deferred.reject(value); 
+                    }, function(reason){ 
+                        if(!_rejected && !_resolved)
+                            deferred.reject(reason); 
                         _rejected = true;
                     });
                 } catch(e) {
