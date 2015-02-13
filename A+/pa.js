@@ -1,35 +1,32 @@
-exports.deferred = function(){
-    /**
-     * Promise 的实现
-     */
+var util = require('util');
+/**
+ * Deferred 的实现
+ */
+function Deferred(){
     var _promise_status = "pending",
         _promise_tasks = [],
         _promise_value;
 
-    function Promise(){ }
+    this.promise = {
+        "then": function(onFulFilled, onRejected){
+            var deferred = new Deferred;
 
-    Promise.prototype.then = function(onFulFilled, onRejected) {
-        var deferred = exports.deferred();
+            _promise_tasks.push( {deferred:deferred, onFulFilled:onFulFilled, onRejected:onRejected} );
 
-        _promise_tasks.push( {deferred:deferred, onFulFilled:onFulFilled, onRejected:onRejected} );
+            if(_promise_status != "pending") setTimeout(_execute);
 
-        if(_promise_status != "pending") setTimeout(_execute);
-
-        return deferred.promise;
+            return deferred.promise;
+        },
+        "state": function(){
+            return _promise_status;
+        }
     };
 
-    /**
-     * Deferred 的实现
-     */
-    function Deferred(){
-        this.promise = new Promise();
-    }
-
-    Deferred.prototype.resolve = function(value){
+    this.resolve = function(value){
         _resolvject(value, "fulfilled");
     };
 
-    Deferred.prototype.reject = function(value){
+    this.reject  = function(value){
         _resolvject(value, "rejected");
     };
 
@@ -46,7 +43,7 @@ exports.deferred = function(){
      * 执行栈的实现
      */
     function _execute() {
-        var _task, _value,
+        var _task, _value, _then,
             _callback = { "fulfilled": "onFulFilled", "rejected" : "onRejected" }, 
             _method = { "fulfilled": "resolve", "rejected" : "reject" };
 
@@ -56,14 +53,7 @@ exports.deferred = function(){
             if(typeof(_task[_callback[_promise_status]]) == "function") {
                 try {
                     _value = _task[_callback[_promise_status]].call(undefined, _promise_value);
-
-                    if(_value && typeof(_value.then) == 'function') {
-                        if(_value == _task.deferred.promise) throw new TypeError("Same Promise Error!");
-
-                        _value.then.call(undefined, function(value){ _task.deferred.resolve(value); }, function(value){ _task.deferred.reject(value); });
-                    }
-                    else
-                        _task.deferred.resolve(_value);
+                    _resolveProc(_task.deferred, _value)
                 } catch(e) {
                     _task.deferred.reject(e);
                 }
@@ -73,5 +63,53 @@ exports.deferred = function(){
         }
     }
 
+    function _resolveProc(deferred, _value){
+        var _then, _resolved=false, _rejected=false;
+
+        // 1.
+        if(_value == deferred.promise) throw new TypeError("Same Promise Error!");
+
+        // 2.
+        if(_value && typeof(_value.state) == "function") {
+            _value.then.call(undefined, function(value){ 
+                _resolveProc(deferred, value);
+            }, function(value){ deferred.reject(value); });
+        }
+
+        // 3.
+        else if(_value && (typeof(_value) == "object" || typeof(_value) == "function")) {
+            try {
+                _then = _value.then;
+            } catch(e) {
+                deferred.reject(e);
+                return;
+            }
+
+            if(typeof(_then) == "function") {
+                try {
+                    _then.call(_value, function(value){
+                        if(!_resolved) 
+                            _resolveProc(deferred, value); 
+                        _resolved = true;
+                    }, function(value){ 
+                        if(!_rejected)
+                            deferred.reject(value); 
+                        _rejected = true;
+                    });
+                } catch(e) {
+                    if(!(_resolved || _rejected)) {
+                        deferred.reject(e);
+                        return;
+                    }
+                }
+            } else 
+                deferred.resolve(_value);
+        } else {
+            deferred.resolve(_value);
+        }
+    }
+}
+
+exports.deferred = function(){
     return new Deferred();
 };
